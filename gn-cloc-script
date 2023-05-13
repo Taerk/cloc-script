@@ -30,19 +30,26 @@ function main() {
     exit 1
   fi
 
-  get_options=$(getopt -o h,l: -l help,debug -- "$@") || exitWithError INVALID_ARGUMENTS "$@"
+  # Get provided options
+  get_options=$(getopt -o h,v -l help,verbose,debug,stdin -- "$@") || exitWithError INVALID_ARGUMENTS "$@"
+
+  # This converts options to a shell-readable format, which 
+  # allows for repeatable arguments (e.g. -vv)
+  eval set -- "$get_options"
 
   # Do argument things
   while true; do
+    echo_debug "Processing argument: $1"
     case "$1" in
       -h) showHelp; exit 1;;
+      -v) [ $opt_loglevel -lt 2 ] && (( opt_loglevel++ ));;
+      --verbose) opt_loglevel=1;;
+      --debug) opt_loglevel=2;;
       --stdin) opt_stdin=1;;
 
       # End loop
-      --|"") shift; break;;
-      
-      # Catch invalid arguments
-      *) opt_files+=("$1");;
+      --) shift; break;;
+      *) exitWithError INVALID_ARGUMENTS "$1";;
     esac
     shift
   done
@@ -54,15 +61,21 @@ function main() {
   done
 
   # Validate input files
-  [ $opt_stdin -eq 1 -a ${#opt_files[@]} -gt 0 ] && exitWithError FILES_AND_STDIN "$1"
+  [ $opt_stdin -eq 1 -a ${#} -gt 0 ] && exitWithError FILES_AND_STDIN "$1"
 
-  for INPUT_FILE in "${opt_files[@]}"; do
-    [ -f "$INPUT_FILE" ] || exitWithError MISSING_FILE "$INPUT_FILE"
-  done
+  if [ $opt_stdin -eq 0 ]; then
+    for INPUT_FILE in "$@"; do
+      [ -f "$INPUT_FILE" ] || exitWithError MISSING_FILE "$INPUT_FILE"
+    done
+  fi
 }
 
-function logMessage() {
-    return
+function echo_verbose() {
+  [ $opt_loglevel -ge 1 ] && echo "$@"
+}
+
+function echo_debug() {
+  [ $opt_loglevel -ge 2 ] && echo "$@"
 }
 
 function showHelp() {
@@ -75,20 +88,20 @@ function showHelp() {
   printf "${B}GN CLOC Script${R}
 
 ${B}SYNOPSIS${R}
-  ${B}gn-cloc-script${R} [${U}options${R}]... ${U}file${R}...
-  ${B}gn-cloc-script${R} [${U}options${R}]... --stdin
+  ${B}gn-cloc-script${R} [${U}option${R}]... ${U}file${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin
 
 ${B}DESCRIPTION${R}
-  $(blockPrint 2 "Runs permission fixes on known homedir directories and files. The script will intentionally attempt to avoid directories and files that are not typically part of cPanel in an effort to prevent breaking non-standard configurations from breaking.")
+  $(blockPrint 2 "Runs cloc (https://cloc.sourceforge.net/) against a provided file(s) or stdin and sends the result to a configured email address.")
 
 ${B}OPTIONS${R}
   ${B}-h${R}, ${B}--help${R}
     Show this help page.
 
-  ${B}-v${R}
+  ${B}-v${R}, ${B}--verbose${R}
     Run script with verbose output.
 
-  ${B}-vv${R}
+  ${B}-vv${R}, ${B}--debug${R}
     Run script with debug output.
 
   ${B}--stdin${R}
@@ -105,10 +118,10 @@ ${B}EMAIL OPTIONS${R}
     $(blockPrint 4 "Set the ${B}from${R} address email notification. If not set, it will default the system's default address.")
 
 ${B}AUTHOR${R}
-    Written by $SCRIPT_AUTHOR <$SCRIPT_CONTACT> for Checkmarx technical assessment #2.
+  Written by $SCRIPT_AUTHOR <$SCRIPT_CONTACT> for Checkmarx technical assessment #2.
 
 ${B}VERSION${R}
-    Version $SCRIPT_VERSION. Last updated $SCRIPT_UPDATED.
+  Version $SCRIPT_VERSION. Last updated $SCRIPT_UPDATED.
 ";
 }
 
