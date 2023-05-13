@@ -8,15 +8,26 @@ declare PKGMNGR=""
 declare LOGLEVEL="warning"
 
 function main() {
-    while (( $# > 0 ))
-    do
-        GETOPT_ERROR=$(getopt --quiet --longoptions "loglevel:" -o "l" "$@" 2>&1)
-        exitWithError INVALID_ARGUMENT "$GETOPT_ERROR"
-        echo "$option_name"
-        shift
-    done
+  options=$(getopt -o h,f,a,A,o,O,p,P,m,M,r:,l,v,z,Z -l help,fix,alt,native,list,revert:,verbose -- "$@") || return 16
 
-    determinePackageManager || exitWithError NO_PKG_MNGR
+  eval set -- "$options"
+
+  # Do argument things
+  while true; do
+    case "$1" in
+    esac
+  done
+  while (( $# > 0 ))
+  do
+    GETOPT_ERROR=$(getopt --quiet -l "loglevel:" -o "l" "$@" 2>&1 | grep -v -- --help)
+    [ -n "$GETOPT_ERROR" ] && exitWithError INVALID_ARGUMENT "$GETOPT_ERROR"
+    echo "$option_name"
+    shift
+  done
+
+  # determinePackageManager || exitWithError NO_PKG_MNGR
+  # checkPackage cloc || installPackage cloc || exitWithError MISSING_DEP
+  # checkPackage mailx || installPackage mailx || exitWithError MISSING_DEP
 }
 
 function logMessage() {
@@ -24,60 +35,54 @@ function logMessage() {
 }
 
 function exitWithError() {
-    local ERROR_ID="$1"
-    local ERROR_CODE=1
-    local ERROR_MSG=""
+  local ERROR_ID="$1"
+  local ERROR_CODE=1
+  local ERROR_MSG=""
 
-    case "$ERROR_ID" in
-        INVALID_ARGUMENT)
-            ERROR_MSG="$2"
-            ;;
-        
-        NO_PKG_MNGR)
-            ERROR_MSG="No valid package manager was found"
-            ;;
-    esac
+  case "$ERROR_ID" in
+    INVALID_ARGUMENT) shift; ERROR_MSG="$@";;
+    NO_PKG_MNGR) shift; ERROR_MSG="No valid package manager was found";;
+    MISSING_DEP) shift; ERROR_MSG="Failed to install missing dependency: $@";;
+  esac
 
-    if [ -n "$ERROR_MSG" ]
-    then
-        echo "Fatal Error: $ERROR_MSG" >&2
-    else
-        echo "Fatal Error: $ERROR_ID" >&2
-    fi
+  [ -n "$ERROR_MSG" ] \
+    && echo "Fatal Error: $ERROR_MSG" >&2 \
+    || echo "Fatal Error: $ERROR_ID" >&2
 
-    return $ERROR_CODE
+  return $ERROR_CODE
 }
 
 # Determines which package manager to use for checking and installing 
 function determinePackageManager() {
-    for PKGMNGR_SEARCH in dnf yum apt
-    do
-        if [ -x "$(which "$PKGMNGR_SEARCH")" ]
-        then
-            PKGMNGR="$PKGMNGR_SEARCH"
-            break
-        fi
-    done
+  for PKGMNGR_SEARCH in dnf yum apt pkg pacman; do
+    if [ -x "$(which "$PKGMNGR_SEARCH")" ]
+    then
+      PKGMNGR="$PKGMNGR_SEARCH"
+      break
+    fi
+  done
 
-    [ -n "$PKGMNGR" ] && return 0
-
-    return 1
+  [ -n "$PKGMNGR" ] && return 0
+  
+  return 1
 }
 
 function installPackage() {
-    return
+  case "$PKGMNGR" in
+    dnf|yum) sudo -n "$PKGMNGR" -y -q install "$@";;
+    apt) sudo -n apt -y -q install "$@";;
+    pkg) sudo -n pkg -y -q install "$@";;
+    pacman) sudo -n pacman -y -q -S install "$@";;
+  esac
 }
 
 function checkPackage() {
-    case "$PKGMNGR" in
-        dnf|yum)
-            "$PKGMNGR" -y -q install "$@"
-            ;;
-        
-        apt)
-            "$PKGMNGR" -y -q install "$@"
-            ;;
-    esac
+  case "$PKGMNGR" in
+    dnf|yum) rpm -q info "$@" >/dev/null;;
+    apt) apt -y -q install "$@";;
+    pkg) pkg -y -q install "$@";;
+    pacman) pacman -y -q install "$@";;
+  esac
 }
 
 main "$@"
