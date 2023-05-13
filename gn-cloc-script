@@ -1,0 +1,181 @@
+#!/bin/bash
+
+# Gabriel N Cloc Script [Technical Assessment #2]
+# Author: Gabriel N
+# Date: May 05 2023
+
+
+# Version Information
+readonly SCRIPT_AUTHOR="Gabriel Nieves"
+readonly SCRIPT_CONTACT="taerkex@gmail.com"
+readonly SCRIPT_VERSION="0.1"
+readonly SCRIPT_UPDATED="May 13 2023"
+
+# Global Variables
+declare -ir UNIX_TIME=$(date +%s)
+declare PKGMNGR=""
+
+# Configurable Settings
+declare -i opt_stdin=0
+declare -i opt_loglevel=0
+declare -a opt_files=()
+
+function main() {
+  # Default output when no arguments are set
+  if [ -z "$1" ]; then
+    echo "gn-cloc-script: missing arguments"
+    echo "Usage: gn-cloc-script [OPTIONS]... FILES..."
+    echo
+    echo "Try \"gn-cloc-script --help\" for more options and information."
+    exit 1
+  fi
+
+  get_options=$(getopt -o h,l: -l help,debug -- "$@") || exitWithError INVALID_ARGUMENTS "$@"
+
+  # Do argument things
+  while true; do
+    case "$1" in
+      -h) showHelp; exit 1;;
+      --stdin) opt_stdin=1;;
+
+      # End loop
+      --|"") shift; break;;
+      
+      # Catch invalid arguments
+      *) opt_files+=("$1");;
+    esac
+    shift
+  done
+
+  # Install necessary packages for the script to continue running 
+  determinePackageManager || exitWithError NO_PACKAGE_MANAGER
+  for dep in cloc mailx sendmail; do
+    checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
+  done
+
+  # Validate input files
+  [ $opt_stdin -eq 1 -a ${#opt_files[@]} -gt 0 ] && exitWithError FILES_AND_STDIN "$1"
+
+  for INPUT_FILE in "${opt_files[@]}"; do
+    [ -f "$INPUT_FILE" ] || exitWithError MISSING_FILE "$INPUT_FILE"
+  done
+}
+
+function logMessage() {
+    return
+}
+
+function showHelp() {
+  local -r R="\e[0m"  # Reset
+  local -r G="\e[2m"  # Gray
+  local -r I="\e[3m"  # Italics
+  local -r U="\e[4m"  # Underline
+  local -r B="\e[97m" # Bold
+
+  printf "${B}GN CLOC Script${R}
+
+${B}SYNOPSIS${R}
+  ${B}gn-cloc-script${R} [${U}options${R}]... ${U}file${R}...
+  ${B}gn-cloc-script${R} [${U}options${R}]... --stdin
+
+${B}DESCRIPTION${R}
+  $(blockPrint 2 "Runs permission fixes on known homedir directories and files. The script will intentionally attempt to avoid directories and files that are not typically part of cPanel in an effort to prevent breaking non-standard configurations from breaking.")
+
+${B}OPTIONS${R}
+  ${B}-h${R}, ${B}--help${R}
+    Show this help page.
+
+  ${B}-v${R}
+    Run script with verbose output.
+
+  ${B}-vv${R}
+    Run script with debug output.
+
+  ${B}--stdin${R}
+    Parse the provided stdin rather than provided file arguments.
+
+${B}EMAIL OPTIONS${R}
+  ${B}-t${R}, ${B}--to${R} ${U}value${R}
+    $(blockPrint 4 "Set the destination address for the email. If not set, the email will be sent to current user's system mail queue.")
+
+  ${B}-s${R}, ${B}--subject${R} ${U}value${R}
+    $(blockPrint 4 "Set the subject for the resulting email notification. If not set, it will default to \"CLOC Analysis Report: # File(s)\".")
+
+  ${B}-f${R}, ${B}--from${R} ${U}value${R}
+    $(blockPrint 4 "Set the ${B}from${R} address email notification. If not set, it will default the system's default address.")
+
+${B}AUTHOR${R}
+    Written by $SCRIPT_AUTHOR <$SCRIPT_CONTACT> for Checkmarx technical assessment #2.
+
+${B}VERSION${R}
+    Version $SCRIPT_VERSION. Last updated $SCRIPT_UPDATED.
+";
+}
+
+# Print a text in an indented block based on input indentation
+function blockPrint() {
+  tabs $1
+  fold -s -w $(( $(tput cols) - $1 )) <<< "$2"  | sed -r "s/^/\t/g"
+}
+
+function exitWithError() {
+  local ERROR_ID="$1"
+  local ERROR_CODE=1
+  local ERROR_MSG=""
+
+  case "$ERROR_ID" in
+    INVALID_ARGUMENT) shift; ERROR_MSG="Invalid argument received \"$@\"";;
+    INVALID_ARGUMENTS) shift; ERROR_MSG="Invalid arguments received. Use -h to view help.";;
+    MISSING_FILE) shift; ERROR_MSG="File not found \"$@\".";;
+    FILES_AND_STDIN) shift; ERROR_MSG="Files were provided while stdin is enabled. Please specify only file arguments OR --stdin";;
+    NO_PACKAGE_MANAGER) shift; ERROR_MSG="No valid package manager was found";;
+    INVALID_PACKAGE_MANAGER) shift; ERROR_MSG="An invalid package manager was provided: $@";;
+    MISSING_DEP) shift; ERROR_MSG="Failed to install missing dependency: $@";;
+  esac
+
+  [ -n "$ERROR_MSG" ] \
+    && echo "Fatal Error: $ERROR_MSG" >&2 \
+    || echo "Fatal Error: $ERROR_ID" >&2
+
+  exit $ERROR_CODE
+}
+
+# Determines which package manager to use for checking and installing 
+function determinePackageManager() {
+  for PKGMNGR_SEARCH in dnf yum apt pkg pacman; do
+    if [ -x "$(which "$PKGMNGR_SEARCH")" ]
+    then
+      PKGMNGR="$PKGMNGR_SEARCH"
+      break
+    fi
+  done
+
+  [ -n "$PKGMNGR" ] && return 0
+  
+  return 1
+}
+
+# Check if a package is available depending on the OS' package manager
+function checkPackage() {
+  case "$PKGMNGR" in
+    dnf|yum) rpm -q "$1" >/dev/null;;
+    apt) apt -y -q install "$1";;
+    pkg) pkg -y -q install "$1";;
+    pacman) pacman -y -q install "$1";;
+    *) exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR";;
+  esac
+}
+
+# Install a package using the OS' package manager
+function installPackage() {
+  echo "Script is installing missing dependencies: $1"
+  case "$PKGMNGR" in
+    dnf|yum) sudo -n "$PKGMNGR" -y -q install "$1";;
+    apt) sudo -n apt -y -q install "$1";;
+    pkg) sudo -n pkg -y -q install "$1";;
+    pacman) sudo -n pacman -y -q -S install "$1";;
+    *) exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR";;
+  esac
+}
+
+main "$@"
