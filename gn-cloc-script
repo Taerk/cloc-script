@@ -60,8 +60,9 @@ function main() {
   # Get provided options
   get_options=$(getopt -o h,v -l help,verbose,debug,stdin,batch,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
 
-  # This converts options to a shell-readable format, which 
-  # allows for repeatable arguments (e.g. -vv)
+  # This converts options to a shell-readable format:
+  #  - allows repeatable arguments (e.g. -vv)
+  #  - puts non hyphed arguments at the end after "--"
   eval set -- "$get_options"
 
   echo_debug "Arguments: $get_options"
