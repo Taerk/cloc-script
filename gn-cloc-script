@@ -1,9 +1,5 @@
 #!/bin/bash
-
 # Gabriel N Cloc Script [Technical Assessment #2]
-# Author: Gabriel N
-# Date: May 05 2023
-
 
 # Version Information
 readonly SCRIPT_AUTHOR="Gabriel Nieves"
@@ -29,7 +25,15 @@ declare opt_email_cc=""
 declare opt_email_bcc=""
 
 #######################################
-# Output provided text when the verbose conditions are met.
+# Main run of the script. It completes the operatiosn in the following order:
+#   1. Ensures arguments are present
+#   2. Check if --debug is set
+#   3. Process all options and adjust variables
+#   4. Determines which package manager to use on the current system
+#   5. Installs any missing packages required
+#   6. Sets the "To" address if it hasn't already been set
+#   7. Makes sure there are still arguments set to load in
+#   8. Iterates through and parses all inputs via cloc
 #
 # Globals:
 #   None
