@@ -1,4 +1,6 @@
 #!/bin/bash
+# shellcheck disable=SC2034,SC2155
+
 # Gabriel N Cloc Script [Technical Assessment #2]
 
 # Version Information
@@ -52,7 +54,7 @@ function main() {
   fi
 
   # Allow --debug early on for process argument testing
-  [ "$1" = --debug ] && { opt_loglevel=2; shift; }
+  [ "$1" = --debug -o "$1" = -vv ] && { opt_loglevel=2; shift; }
 
   # Get provided options
   get_options=$(getopt -o h,v -l help,verbose,debug,stdin,batch,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
@@ -89,7 +91,7 @@ function main() {
     checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
   done
 
-  echo_debug "cloc Options:" $opt_clocopts
+  echo_debug "cloc Options: $opt_clocopts"
 
   # Take the first available argument as an email address if it hasn't
   # already been specified
@@ -208,7 +210,7 @@ function showHelp() {
   local -r U="\e[4m"  # Underline
   local -r B="\e[97m" # Bold
 
-  printf "${B}GN CLOC Script${R}
+  echo -e "${B}GN CLOC Script${R}
 
 ${B}SYNOPSIS${R}
   ${B}gn-cloc-script${R} [${U}option${R}]... [-t ${U}emailaddr${R}|${U}emailaddr${R}] ${U}repourl${R}...
@@ -293,7 +295,7 @@ ${B}VERSION${R}
 #   None
 #######################################
 function blockPrint() {
-  tabs $1
+  tabs "$1"
   fold -s -w $(( $(tput cols) - $1 )) <<< "$2"  | sed -r "s/^/\t/g"
 }
 
@@ -315,13 +317,13 @@ function exitWithError() {
   local ERROR_MSG=""
 
   case "$ERROR_ID" in
-    INVALID_ARGUMENT) shift; ERROR_MSG="Invalid argument received \"$@\"";;
-    INVALID_ARGUMENTS) shift; ERROR_MSG="Invalid arguments received: $@\nUse -h to view help for valid arguments.";;
-    MISSING_FILE) shift; ERROR_MSG="File not found \"$@\".";;
+    INVALID_ARGUMENT) shift; ERROR_MSG="Invalid argument received \"$*\"";;
+    INVALID_ARGUMENTS) shift; ERROR_MSG="Invalid arguments received: $*\nUse -h to view help for valid arguments.";;
+    MISSING_FILE) shift; ERROR_MSG="File not found \"$*\".";;
     FILES_AND_STDIN) shift; ERROR_MSG="Files were provided while stdin is enabled. Please specify only file arguments OR --stdin";;
     NO_PACKAGE_MANAGER) shift; ERROR_MSG="No valid package manager was found";;
-    INVALID_PACKAGE_MANAGER) shift; ERROR_MSG="An invalid package manager was provided: $@";;
-    MISSING_DEP) shift; ERROR_MSG="Failed to install missing dependency: $@";;
+    INVALID_PACKAGE_MANAGER) shift; ERROR_MSG="An invalid package manager was provided: $*";;
+    MISSING_DEP) shift; ERROR_MSG="Failed to install missing dependency: $*";;
   esac
 
   [ -n "$ERROR_MSG" ] \
@@ -411,8 +413,9 @@ function installPackage() {
 #######################################
 function cloneRepo() {
   local repo_url="$1"
-  local repo_dir=$(getRepoDirectory "$1")
+  local repo_dir=""
 
+  repo_dir="$(getRepoDirectory "$1")"
   git clone "$repo_url" "$repo_dir"
 }
 
@@ -437,24 +440,30 @@ function getRepoDirectory() {
 #
 # Globals:
 #   opt_email_from
-#   opt_email_to
 #   opt_email_subject
 #   opt_email_cc
 #   opt_email_bcc
+#   opt_email_to
 # Arguments:
 #   stdin - Loads in stdin as the contents for the email
 # Returns:
 #   None
 #######################################
 function sendEmail() {
-  [ -n "$opt_email_from" ] && local mailx_from="-r \"${opt_email_from}\""
-  [ -n "$opt_email_to" ] && local mailx_to="\"${opt_email_to}\""
-  [ -n "$opt_email_subject" ] && local mailx_subject="-s \"${opt_email_subject}\""
-  [ -n "$opt_email_cc" ] && local mailx_cc="-c \"${opt_email_from}\""
-  [ -n "$opt_email_bcc" ] && local mailx_bcc="-b \"${opt_email_from}\""
+  local fflag="" fval=""
+  local sflag="" sval=""
+  local cflag="" cval=""
+  local bflag="" bval=""
+  local tval="" # "To" does not use an option flag in mailx
+
+  [ -n "$opt_email_from" ] && { fflag="-r"; fval="$opt_email_from"; }
+  [ -n "$opt_email_subject" ] && { sflag="-s"; sval="$opt_email_subject"; }
+  [ -n "$opt_email_cc" ] && { cflag="-c"; cval="$opt_email_cc"; }
+  [ -n "$opt_email_bcc" ] && { bflag="-b"; bval="$opt_email_bcc"; }
+  [ -n "$opt_email_to" ] && { tval="$opt_email_to"; }
 
   # Variables below should remain unquoted in order to be expanded as valid arguments
-  mail ${mailx_subject} ${mailx_from} ${mailx_cc} ${mailx_bcc} ${mailx_to} < /dev/stdin 
+  mail "$fflag" "$fval" "$sflag" "$sval" "$cflag" "$cval" "$bflag" "$bval" "$tval" < /dev/stdin 
 }
 
 main "$@"
