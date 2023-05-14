@@ -9,65 +9,118 @@
 readonly SCRIPT_AUTHOR="Gabriel Nieves"
 readonly SCRIPT_CONTACT="taerkex@gmail.com"
 readonly SCRIPT_VERSION="0.1"
-readonly SCRIPT_UPDATED="May 13 2023"
+readonly SCRIPT_UPDATED="May 14 2023"
 
 # Global Variables
 declare -ir UNIX_TIME=$(date +%s)
+declare -r LOG_DIR="/tmp"
 declare PKGMNGR=""
 
 # Configurable Settings
-declare -i opt_stdin=0
+declare -i opt_scan_mode="git"
 declare -i opt_loglevel=0
-declare -a opt_files=()
+declare -i opt_batch=0
+declare opt_clocopts=""
+declare -i opt_email_batch=0
+declare opt_email_to=""
+declare opt_email_subject=""
+declare opt_email_from=""
+declare opt_email_cc=""
+declare opt_email_bcc=""
 
 function main() {
   # Default output when no arguments are set
   if [ -z "$1" ]; then
-    echo "gn-cloc-script: missing arguments"
-    echo "Usage: gn-cloc-script [OPTIONS]... FILES..."
-    echo
-    echo "Try \"gn-cloc-script --help\" for more options and information."
+    showSimpleHelp
     exit 1
   fi
 
+  # Allow --debug early on for process argument testing
+  [ "$1" = --debug ] && { opt_loglevel=2; shift; }
+
   # Get provided options
-  get_options=$(getopt -o h,v -l help,verbose,debug,stdin -- "$@") || exitWithError INVALID_ARGUMENTS "$@"
+  get_options=$(getopt -o h,v -l help,verbose,debug,stdin,batch,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
 
   # This converts options to a shell-readable format, which 
   # allows for repeatable arguments (e.g. -vv)
   eval set -- "$get_options"
 
+  echo_debug "Arguments: $get_options"
+
   # Do argument things
   while true; do
-    echo_debug "Processing argument: $1"
+    echo_debug "Processing argument: $1 (\$2: $2)"
     case "$1" in
-      -h) showHelp; exit 1;;
+      -h|--help) showHelp; exit 1;;
       -v) [ $opt_loglevel -lt 2 ] && (( opt_loglevel++ ));;
       --verbose) opt_loglevel=1;;
       --debug) opt_loglevel=2;;
-      --stdin) opt_stdin=1;;
+      -G|--git|--repo) opt_scan_mode="git";;
+      -S|--stdin) opt_scan_mode="stdin";;
+      -F|--files) opt_scan_mode="files";;
+      --cloc-options) opt_clocopts="$2"; shift;;
 
       # End loop
       --) shift; break;;
-      *) exitWithError INVALID_ARGUMENTS "$1";;
+      *) exitWithError INVALID_ARGUMENT "$1";;
     esac
     shift
   done
 
   # Install necessary packages for the script to continue running 
   determinePackageManager || exitWithError NO_PACKAGE_MANAGER
-  for dep in cloc mailx sendmail; do
+  for dep in cloc mailx sendmail sed; do
     checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
   done
 
-  # Validate input files
-  [ $opt_stdin -eq 1 -a ${#} -gt 0 ] && exitWithError FILES_AND_STDIN "$1"
+  echo_debug "cloc Options:" $opt_clocopts
 
-  if [ $opt_stdin -eq 0 ]; then
-    for INPUT_FILE in "$@"; do
-      [ -f "$INPUT_FILE" ] || exitWithError MISSING_FILE "$INPUT_FILE"
-    done
+  # Take the first available argument as an email address if it hasn't
+  # already been specified
+  if [ -z "$opt_email_to" ]; then
+    opt_email_to="$1"
+    echo_debug "Email address has been set to \"$opt_email_to\""
+    shift
   fi
+
+  # Check if there are still arguments. If there aren't, show the command usage
+  if [ -z "$1" ]; then
+    showSimpleHelp
+    return 1
+  fi
+
+  # Scan provided files
+  case "$opt_scan_mode" in
+    git)
+      for INPUT_SOURCE in "$@"; do
+        echo "Checking repository $INPUT_SOURCE"
+
+        if ! cloneRepo "$INPUT_SOURCE"; then
+          exitWithError REPO_ERROR
+        fi
+
+        # $opt_clocopts needs to remain unquoted in order to expand properly
+        cloc $opt_clocopts "$INPUT_SOURCE"
+      done
+      ;;
+    
+    files)
+      for INPUT_SOURCE in "$@"; do
+        echo "Checking file: $INPUT_SOURCE"
+
+        # Make sure the file exists, otherwise error out
+        [ -f "$INPUT_SOURCE" ] || exitWithError MISSING_FILE "$INPUT_SOURCE"
+
+        # $opt_clocopts needs to remain unquoted in order to expand properly
+        cloc $opt_clocopts "$INPUT_SOURCE"
+      done
+      ;;
+
+    stdin)
+      echo "Checking code via stdin"
+      cloc $opt_clocopts - < /dev/stdin
+      ;;
+  esac
 }
 
 function echo_verbose() {
@@ -75,7 +128,14 @@ function echo_verbose() {
 }
 
 function echo_debug() {
-  [ $opt_loglevel -ge 2 ] && echo "$@"
+  [ $opt_loglevel -ge 2 ] && echo "[DEBUG] $@"
+}
+
+function showSimpleHelp() {
+  echo "gn-cloc-script: missing arguments"
+  echo "Usage: gn-cloc-script [OPTIONS]... EMAILDDR REPOURL..."
+  echo
+  echo "Try \"gn-cloc-script --help\" for more options and information."
 }
 
 function showHelp() {
@@ -88,40 +148,60 @@ function showHelp() {
   printf "${B}GN CLOC Script${R}
 
 ${B}SYNOPSIS${R}
-  ${B}gn-cloc-script${R} [${U}option${R}]... ${U}file${R}...
-  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin
+  ${B}gn-cloc-script${R} [${U}option${R}]... [${U}emailaddr${R}] ${U}repourl${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --files [${U}emailaddr${R}] ${U}file${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin [${U}emailaddr${R}]
 
 ${B}DESCRIPTION${R}
-  $(blockPrint 2 "Runs cloc (https://cloc.sourceforge.net/) against a provided file(s) or stdin and sends the result to a configured email address.")
+  $(blockPrint 2 "Runs cloc (https://cloc.sourceforge.net/) against a provided repo, file(s), or stdin and sends the result to a configured email address.")
 
 ${B}OPTIONS${R}
   ${B}-h${R}, ${B}--help${R}
-    Show this help page.
+    $(blockPrint 4 "Show this help page.")
 
   ${B}-v${R}, ${B}--verbose${R}
-    Run script with verbose output.
+    $(blockPrint 4 "Run script with verbose output.")
 
   ${B}-vv${R}, ${B}--debug${R}
-    Run script with debug output.
+    $(blockPrint 4 "Run script with debug output.")
 
-  ${B}--stdin${R}
-    Parse the provided stdin rather than provided file arguments.
+${B}PARSING OPTIONS${R}
+  ${B}-G${R}, ${B}--git${R}, ${B}--repo${R}
+    $(blockPrint 4 "Clone a provided git repo URL to be scanned. This is the default behavior.")
+
+  ${B}-F${R}, ${B}--files${R}
+    $(blockPrint 4 "Parse the provided file list to be scanned.")
+
+  ${B}-S${R}, ${B}--stdin${R}
+    $(blockPrint 4 "Parse the provided stdin to be scanned.")
+
+  ${B}--cloc-options${R} ${U}options...${R}
+    $(blockPrint 4 "Passes provided options to the ${B}cloc${R} command.")
 
 ${B}EMAIL OPTIONS${R}
-  ${B}-t${R}, ${B}--to${R} ${U}value${R}
+  ${B}-B${R}, ${B}--batch${R}
+    $(blockPrint 4 "When running script on multiple files, sends a single email rather than an individual email for each file.")
+
+  ${B}-t${R}, ${B}--to${R} ${U}emailaddr${R}
     $(blockPrint 4 "Set the destination address for the email. If not set, the email will be sent to current user's system mail queue.")
 
   ${B}-s${R}, ${B}--subject${R} ${U}value${R}
     $(blockPrint 4 "Set the subject for the resulting email notification. If not set, it will default to \"CLOC Analysis Report: # File(s)\".")
 
-  ${B}-f${R}, ${B}--from${R} ${U}value${R}
+  ${B}-f${R}, ${B}--from${R} ${U}emailaddr${R}
     $(blockPrint 4 "Set the ${B}from${R} address email notification. If not set, it will default the system's default address.")
 
+  ${B}-c${R}, ${B}--cc${R} ${U}emailaddr${R}
+    $(blockPrint 4 "Set the ${B}cc${R} for the notification email. Use commas for multiple emails.")
+
+  ${B}-b${R}, ${B}--bcc${R} ${U}emailaddr${R}
+    $(blockPrint 4 "Set the ${B}bcc${R} for the notification email. Use commas for multiple emails.")
+
 ${B}AUTHOR${R}
-  Written by $SCRIPT_AUTHOR <$SCRIPT_CONTACT> for Checkmarx technical assessment #2.
+  $(blockPrint 2 "Written by $SCRIPT_AUTHOR <$SCRIPT_CONTACT> for Checkmarx technical assessment #2.")
 
 ${B}VERSION${R}
-  Version $SCRIPT_VERSION. Last updated $SCRIPT_UPDATED.
+  $(blockPrint 2 "Version $SCRIPT_VERSION. Last updated $SCRIPT_UPDATED.")
 ";
 }
 
@@ -138,7 +218,7 @@ function exitWithError() {
 
   case "$ERROR_ID" in
     INVALID_ARGUMENT) shift; ERROR_MSG="Invalid argument received \"$@\"";;
-    INVALID_ARGUMENTS) shift; ERROR_MSG="Invalid arguments received. Use -h to view help.";;
+    INVALID_ARGUMENTS) shift; ERROR_MSG="Invalid arguments received: $@\nUse -h to view help for valid arguments.";;
     MISSING_FILE) shift; ERROR_MSG="File not found \"$@\".";;
     FILES_AND_STDIN) shift; ERROR_MSG="Files were provided while stdin is enabled. Please specify only file arguments OR --stdin";;
     NO_PACKAGE_MANAGER) shift; ERROR_MSG="No valid package manager was found";;
@@ -147,8 +227,8 @@ function exitWithError() {
   esac
 
   [ -n "$ERROR_MSG" ] \
-    && echo "Fatal Error: $ERROR_MSG" >&2 \
-    || echo "Fatal Error: $ERROR_ID" >&2
+    && echo -e "Fatal Error: $ERROR_MSG" >&2 \
+    || echo -e "Fatal Error: $ERROR_ID" >&2
 
   exit $ERROR_CODE
 }
@@ -189,6 +269,17 @@ function installPackage() {
     pacman) sudo -n pacman -y -q -S install "$1";;
     *) exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR";;
   esac
+}
+
+function cloneRepo() {
+  local repo_url="$1"
+  local repo_dir=$(getRepoDirectory "$1")
+
+  git clone "$repo_url" "$repo_dir"
+}
+
+function getRepoDirectory() {
+  basename "$1" | sed -r 's/\.git$//'
 }
 
 main "$@"
