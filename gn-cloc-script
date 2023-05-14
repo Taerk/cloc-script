@@ -28,6 +28,18 @@ declare opt_email_from=""
 declare opt_email_cc=""
 declare opt_email_bcc=""
 
+#######################################
+# Output provided text when the verbose conditions are met.
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Accepts --debug as the FIRST argument to run in debug mode early
+#   $@ - All arguments. These are parsed and used to adjust variables.
+# Returns:
+#   0 - On success
+#   Non-zero - On failure (code varies by failure type)
+#######################################
 function main() {
   # Default output when no arguments are set
   if [ -z "$1" ]; then
@@ -123,14 +135,46 @@ function main() {
   esac
 }
 
+#######################################
+# Output provided text when the verbose conditions are met.
+#
+# Globals:
+#   opt_loglevel
+# Arguments:
+#   $1 - Text to output
+# Returns:
+#   None
+#######################################
 function echo_verbose() {
-  [ $opt_loglevel -ge 1 ] && echo "$@"
+  [ $opt_loglevel -ge 1 ] && echo "$1"
 }
 
+#######################################
+# Output provided text when the debug conditions are met.
+#
+# Globals:
+#   opt_loglevel
+# Arguments:
+#   $1 - Text to output
+# Returns:
+#   None
+#######################################
 function echo_debug() {
-  [ $opt_loglevel -ge 2 ] && echo "[DEBUG] $@"
+  [ $opt_loglevel -ge 2 ] && echo "[DEBUG] $1"
 }
 
+#######################################
+# Print a shorter help snippet on how to use this script. This should typically
+# be followed by a non-zero exit code in order to avoid the command being
+# treated as a successful run.
+#
+# Globals:
+#   None
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
 function showSimpleHelp() {
   echo "gn-cloc-script: missing arguments"
   echo "Usage: gn-cloc-script [OPTIONS]... EMAILDDR REPOURL..."
@@ -138,6 +182,21 @@ function showSimpleHelp() {
   echo "Try \"gn-cloc-script --help\" for more options and information."
 }
 
+#######################################
+# Print a longer help page regarding this script. This should typically be
+# followed by a non-zero exit code in order to avoid the command being
+# treated as a successful run.
+#
+# Globals:
+#   SCRIPT_AUTHOR
+#   SCRIPT_CONTACT
+#   SCRIPT_VERSION
+#   SCRIPT_UPDATED
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
 function showHelp() {
   local -r R="\e[0m"  # Reset
   local -r G="\e[2m"  # Gray
@@ -148,9 +207,9 @@ function showHelp() {
   printf "${B}GN CLOC Script${R}
 
 ${B}SYNOPSIS${R}
-  ${B}gn-cloc-script${R} [${U}option${R}]... [${U}emailaddr${R}] ${U}repourl${R}...
-  ${B}gn-cloc-script${R} [${U}option${R}]... --files [${U}emailaddr${R}] ${U}file${R}...
-  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin [${U}emailaddr${R}]
+  ${B}gn-cloc-script${R} [${U}option${R}]... [-t ${U}emailaddr${R}|${U}emailaddr${R}] ${U}repourl${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --files [-t ${U}emailaddr${R}|${U}emailaddr${R}] ${U}file${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin [-t ${U}emailaddr${R}|${U}emailaddr${R}]
 
 ${B}DESCRIPTION${R}
   $(blockPrint 2 "Runs cloc (https://cloc.sourceforge.net/) against a provided repo, file(s), or stdin and sends the result to a configured email address.")
@@ -205,12 +264,47 @@ ${B}VERSION${R}
 ";
 }
 
+#######################################
 # Print a text in an indented block based on input indentation
+#
+# In particular, it changes the style of the wrapping from the first paragraph
+# below to the second with the spaces prior to each line being dependent on the
+# first argument:
+# 
+#     Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod te
+# mpor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, qui
+# s nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+#
+#     Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+#     tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+#     veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+#     commodo consequat.
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Number of spaces to prefix each line
+#   $2 - Message to be wrapped
+# Returns:
+#   None
+#######################################
 function blockPrint() {
   tabs $1
   fold -s -w $(( $(tput cols) - $1 )) <<< "$2"  | sed -r "s/^/\t/g"
 }
 
+#######################################
+# Outputs a fatal error message and exits the application. The output message
+# is dependent on the provided arguments.
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Error ID of the message
+#   $2 - Additional information used by a message. Varies between messages.
+# Returns:
+#   Non-zero exit code, typically 1. May change depending on error type.
+#######################################
 function exitWithError() {
   local ERROR_ID="$1"
   local ERROR_CODE=1
@@ -233,7 +327,17 @@ function exitWithError() {
   exit $ERROR_CODE
 }
 
+#######################################
 # Determines which package manager to use for checking and installing 
+#
+# Globals:
+#   None
+# Arguments:
+#   None
+# Returns:
+#   0 - Function successfully found a compatible package manager
+#   1 - Function failed to find a compatible package manager
+#######################################
 function determinePackageManager() {
   for PKGMNGR_SEARCH in dnf yum apt pkg pacman; do
     if [ -x "$(which "$PKGMNGR_SEARCH")" ]
@@ -248,7 +352,17 @@ function determinePackageManager() {
   return 1
 }
 
-# Check if a package is available depending on the OS' package manager
+#######################################
+# Check if a package is installed depending on the OS' package manager.
+# Function will output a fatal error and exit the application upon a failure.
+#
+# Globals:
+#   PKGMNGR
+# Arguments:
+#   $1 - Name of the package to check
+# Returns:
+#   None
+#######################################
 function checkPackage() {
   case "$PKGMNGR" in
     dnf|yum) rpm -q "$1" >/dev/null;;
@@ -259,7 +373,17 @@ function checkPackage() {
   esac
 }
 
+#######################################
 # Install a package using the OS' package manager
+# Function will output a fatal error and exit the application upon a failure.
+#
+# Globals:
+#   PKGMNGR
+# Arguments:
+#   $1 - Name of the package to install
+# Returns:
+#   None
+#######################################
 function installPackage() {
   echo "Script is installing missing dependencies: $1"
   case "$PKGMNGR" in
@@ -271,6 +395,16 @@ function installPackage() {
   esac
 }
 
+#######################################
+# Clones repository into a directory determined by the application
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Git repository URL
+# Returns:
+#   None
+#######################################
 function cloneRepo() {
   local repo_url="$1"
   local repo_dir=$(getRepoDirectory "$1")
@@ -278,8 +412,45 @@ function cloneRepo() {
   git clone "$repo_url" "$repo_dir"
 }
 
+#######################################
+# Outputs a converted repository URL into the expected resulting directory name
+#   Example #1: https://git.xtnet.link/Taerk/cloc-script.git -> cloc-script
+#   Example #2: git@git.xtnet.link:Taerk/cloc-script.git -> cloc-script
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Git repository URL
+# Returns:
+#   None
+#######################################
 function getRepoDirectory() {
   basename "$1" | sed -r 's/\.git$//'
+}
+
+#######################################
+# Sends an email using settings and content set by the application
+#
+# Globals:
+#   opt_email_from
+#   opt_email_to
+#   opt_email_subject
+#   opt_email_cc
+#   opt_email_bcc
+# Arguments:
+#   stdin - Loads in stdin as the contents for the email
+# Returns:
+#   None
+#######################################
+function sendEmail() {
+  [ -n "$opt_email_from" ] && local mailx_from="-r \"${opt_email_from}\""
+  [ -n "$opt_email_to" ] && local mailx_to="\"${opt_email_to}\""
+  [ -n "$opt_email_subject" ] && local mailx_subject="-s \"${opt_email_subject}\""
+  [ -n "$opt_email_cc" ] && local mailx_cc="-c \"${opt_email_from}\""
+  [ -n "$opt_email_bcc" ] && local mailx_bcc="-b \"${opt_email_from}\""
+
+  # Variables below should remain unquoted in order to be expanded as valid arguments
+  mail ${mailx_subject} ${mailx_from} ${mailx_cc} ${mailx_bcc} ${mailx_to} < /dev/stdin 
 }
 
 main "$@"
