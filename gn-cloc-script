@@ -102,7 +102,7 @@ function main() {
   for dep in cloc mailx sendmail sed coreutils; do
     case "$dep" in
       cloc)
-        checkPackage "$dep" || installPackage "$dep" || test -x ~/bin/cloc || installClocPl || exitWithError MISSING_DEP
+        test -x ~/bin/cloc || checkPackage "$dep" || installPackage "$dep" || installClocPl || exitWithError MISSING_DEP
         ;;
       *) checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
         ;;
