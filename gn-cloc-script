@@ -106,8 +106,8 @@ function main() {
   fi
 
   # Check if there are still arguments. If there aren't, show the command usage
-  if [ -z "$1" -a -z "$opt_email_to" ]; then
-    showSimpleHelp "from-addr"
+  if [ -z "$opt_email_to" ]; then
+    showSimpleHelp "to-addr"
     return 1
   fi
 
@@ -191,9 +191,9 @@ function showHelp() {
   echo -e "${B}GN CLOC Script${R}
 
 ${B}SYNOPSIS${R}
-  ${B}gn-cloc-script${R} [${U}option${R}]... [-t ${U}emailaddr${R}|${U}emailaddr${R}] ${U}repourl${R}...
-  ${B}gn-cloc-script${R} [${U}option${R}]... --files [-t ${U}emailaddr${R}|${U}emailaddr${R}] ${U}file${R}...
-  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin [-t ${U}emailaddr${R}|${U}emailaddr${R}]
+  ${B}gn-cloc-script${R} [${U}option${R}]... [-t ${U}to-addr${R}|${U}to-addr${R}] ${U}repourl${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --files [-t ${U}to-addr${R}|${U}to-addr${R}] ${U}file${R}...
+  ${B}gn-cloc-script${R} [${U}option${R}]... --stdin [-t ${U}to-addr${R}|${U}to-addr${R}]
 
 ${B}DESCRIPTION${R}
   $(blockPrint 2 "Runs cloc (https://cloc.sourceforge.net/) against a provided repo, file(s), or stdin and sends the result to a configured email address.")
@@ -221,8 +221,8 @@ ${B}PARSING OPTIONS${R}
   ${B}-S${R}, ${B}--stdin${R}
     $(blockPrint 4 "Parse the provided stdin to be scanned.")
 
-  ${B}--cloc-options${R} ${U}options...${R}
-    $(blockPrint 4 "Passes provided options to the ${B}cloc${R} command.")
+  ${B}--cloc-options${R} ${U}options${R}...
+    $(blockPrint 4 "Passes provided options to the ${B}cloc${R} command. Example: ${I}gn-cloc-script --cloc-options=\"--stdin --stat\"${R}")
 
 ${B}EMAIL OPTIONS${R}
   $(blockPrint 2 "The script provides various methods for adjusting the email settings. Options can be used or environment variables can be used. Refer to the arguments below for available environment variables for each setting.")
@@ -232,7 +232,7 @@ ${B}EMAIL OPTIONS${R}
   ${B}-B${R}, ${B}--batch${R}
     $(blockPrint 4 "When running script on multiple files, sends a single email rather than an individual email for each file.")
 
-  ${B}-t${R}, ${B}--to${R} ${U}emailaddr${R}
+  ${B}-t${R}, ${B}--to${R} ${U}to-addr${R}
     $(blockPrint 4 "Set the destination address for the email. This is a required setting either through this argument or as an argument for the script.")
 
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_TO${R} environment variable.")
@@ -242,17 +242,17 @@ ${B}EMAIL OPTIONS${R}
 
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_SUBJECT${R} environment variable.")
 
-  ${B}-f${R}, ${B}--from${R} ${U}emailaddr${R}
+  ${B}-f${R}, ${B}--from${R} ${U}from-addr${R}
     $(blockPrint 4 "Set the ${B}from${R} address email notification. If not set, it will default the system's default address.")
 
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_FROM${R} environment variable.")
 
-  ${B}-c${R}, ${B}--cc${R} ${U}emailaddr${R}
+  ${B}-c${R}, ${B}--cc${R} ${U}cc-addr${R}
     $(blockPrint 4 "Set the ${B}cc${R} for the notification email. Use commas to separate multiple emails.")
 
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_CC${R} environment variable.")
 
-  ${B}-b${R}, ${B}--bcc${R} ${U}emailaddr${R}
+  ${B}-b${R}, ${B}--bcc${R} ${U}bcc-addr${R}
     $(blockPrint 4 "Set the ${B}bcc${R} for the notification email. Use commas to separate multiple emails.")
     
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_BCC${R} environment variable.")
