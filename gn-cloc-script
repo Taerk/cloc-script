@@ -137,7 +137,7 @@ function main() {
 #   None
 #######################################
 function echo_verbose() {
-  [ $opt_loglevel -ge 1 ] && echo "$1"
+  [ $opt_loglevel -ge 1 ] && echo "$*"
 }
 
 #######################################
@@ -151,7 +151,7 @@ function echo_verbose() {
 #   None
 #######################################
 function echo_debug() {
-  [ $opt_loglevel -ge 2 ] && echo "[DEBUG] $1"
+  [ $opt_loglevel -ge 2 ] && echo "[DEBUG] $*"
 }
 
 #######################################
