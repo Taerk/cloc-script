@@ -19,6 +19,7 @@ declare PKGMNGR=""
 
 # Configurable Settings
 [ -f ~/cloc_config ] && source ~/cloc_config
+source /etc/os-release
 declare opt_scan_mode="git"
 declare -i opt_loglevel=0
 declare -i opt_batch=0
@@ -528,8 +529,34 @@ function sendEmail() {
   fi
 }
 
+#######################################
+# Sends an email using settings and content set by the application
+#
+# Globals:
+#   opt_scan_mode
+#   OUT_PATH
+#   ID       (from /etc/os-release)
+#   VERSION  (from /etc/os-release)
+#   HOSTNAME (from env)
+#   PWD      (from env)
+# Arguments:
+#   $@ - Input sources
+# Returns:
+#   0 - Should always return 0 so it can email errors
+#######################################
 function parseSources() {
   echo_debug "Now attempting to parse all sources. Scan mode is: $opt_scan_mode"
+
+  # Provide some information about the run conditions for the check
+  cat > "$OUT_PATH" <<- EOF
+PARSING SYSTEM INFORMATION
+-----
+$HOSTNAME <$(hostname -i)>
+OS: $ID $VERSION
+Running as user: $USER
+Working directory: $PWD
+-----
+EOF
 
   # Scan provided files
   case "$opt_scan_mode" in
@@ -549,8 +576,22 @@ function parseSources() {
       parseStdin
       ;;
   esac 2>&1 | tee "$OUT_PATH"
+
+  return 0
 }
 
+#######################################
+# Clones and parses a given repository with cloc
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Git repository URL
+# Returns:
+#   0 - When reaching the end and cloc succeeds
+#   1 - When failing to clone repo
+#   Non-zero - Return code depenent cloc
+#######################################
 function parseRepo() {
   local source_repo="$1"
   local repo_destination=""
@@ -573,6 +614,18 @@ function parseRepo() {
   cloc $opt_clocopts "$repo_destination"
 }
 
+#######################################
+# Parses a given file or directory already on the system with cloc
+#
+# Globals:
+#   None
+# Arguments:
+#   $1 - Path to file or directory
+# Returns:
+#   0 - When reaching the end and cloc succeeds
+#   1 - When file does not exist
+#   Non-zero - Return code of cloc
+#######################################
 function parseFile() {
   local source_file="$1"
 
@@ -594,10 +647,28 @@ function parseFile() {
   cloc $opt_clocopts "$source_file"
 }
 
+#######################################
+# Parses given stdin with cloc
+#
+# Globals:
+#   None
+# Arguments:
+#   stdin - Data to parse with cloc
+# Returns:
+#   0 - When reaching the end and cloc succeeds
+#   1 - When stdin is not provided
+#   Non-zero - Return code of cloc
+#######################################
 function parseStdin() {
   echo "---"
   echo "Type: stdin"
   echo "---"
+
+  # This will check if there's a stdin and if not will time out
+  if [ -t 0 ]; then
+    echo "Error: No stdin was provided" >&2
+    return 1
+  fi
 
   echo "Checking code via stdin"
   cloc $opt_clocopts - < /dev/stdin
