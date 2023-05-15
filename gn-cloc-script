@@ -609,13 +609,14 @@ function parseSources() {
 
   # Provide some information about the run conditions for the check
   cat >> "$OUT_PATH" <<- EOF
-PARSING SYSTEM INFORMATION
+System Information:
+  $HOSTNAME <$(hostname -i)>
+  OS: $ID $VERSION
+  Running as user: $USER
+  Working directory: $PWD
 -----
-$HOSTNAME <$(hostname -i)>
-OS: $ID $VERSION
-Running as user: $USER
-Working directory: $PWD
------
+
+Scanned Inputs:
 EOF
 
   # Scan provided files
@@ -661,7 +662,7 @@ function parseRepo() {
   repo_destination="$(getRepoDirectory "$source_repo")"
   echo_debug "Expected clone path: $repo_destination"
 
-  echo "---"
+  echo
   echo "Type: git"
   echo "Src:  $source_repo"
   echo "Dir:  $repo_destination"
