@@ -16,9 +16,10 @@ declare PKGMNGR=""
 
 # Configurable Settings
 [ -f cloc_config ] && source cloc_config
-declare -i opt_scan_mode="git"
+declare opt_scan_mode="git"
 declare -i opt_loglevel=0
 declare -i opt_batch=0
+declare opt_clone_dir=""
 declare opt_clocopts=""
 declare -i opt_email_batch=0
 declare opt_email_to="$CLOC_MAILX_TO"
@@ -36,7 +37,7 @@ declare opt_email_bcc="$CLOC_MAILX_BCC"
 #   5. Installs any missing packages required
 #   6. Sets the "To" address if it hasn't already been set
 #   7. Makes sure there are still arguments set to load in
-#   8. Iterates through and parses all inputs via cloc
+#   8. Iterates through and parses all sources via cloc
 #
 # Globals:
 #   None
@@ -58,7 +59,7 @@ function main() {
   [ "$1" = --debug -o "$1" = -vv ] && { opt_loglevel=2; shift; }
 
   # Get provided options
-  get_options=$(getopt -o h,v -l help,verbose,debug,stdin,batch,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
+  get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,stdin,batch,clone-dir:,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
 
   # This converts options to a shell-readable format:
   #  - allows repeatable arguments (e.g. -vv)
@@ -75,6 +76,7 @@ function main() {
       -v) [ $opt_loglevel -lt 2 ] && (( opt_loglevel++ ));;
       --verbose) opt_loglevel=1;;
       --debug) opt_loglevel=2;;
+      -D|--clone-dir) opt_clone_dir="$2"; shift;;
       -G|--git|--repo) opt_scan_mode="git";;
       -S|--stdin) opt_scan_mode="stdin";;
       -F|--files) opt_scan_mode="files";;
@@ -89,58 +91,28 @@ function main() {
 
   # Install necessary packages for the script to continue running 
   determinePackageManager || exitWithError NO_PACKAGE_MANAGER
-  for dep in cloc mailx sendmail sed; do
+  for dep in cloc mailx sendmail sed coreutils; do
     checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
   done
 
   echo_debug "cloc Options: $opt_clocopts"
 
   # Take the first available argument as an email address if it hasn't
-  # already been specified
-  if [ -z "$opt_email_to" ]; then
+  # already been specified.
+  if [[ -z "$opt_email_to" && "$1" =~ \@ && ! "$1" =~ \.git$ ]]; then
     opt_email_to="$1"
     echo_debug "Email address has been set to \"$opt_email_to\""
     shift
   fi
 
   # Check if there are still arguments. If there aren't, show the command usage
-  if [ -z "$1" ]; then
-    showSimpleHelp
+  if [ -z "$1" -a -z "$opt_email_to" ]; then
+    showSimpleHelp "from-addr"
     return 1
   fi
 
-  # Scan provided files
-  case "$opt_scan_mode" in
-    git)
-      for INPUT_SOURCE in "$@"; do
-        echo "Checking repository $INPUT_SOURCE"
-
-        if ! cloneRepo "$INPUT_SOURCE"; then
-          exitWithError REPO_ERROR
-        fi
-
-        # $opt_clocopts needs to remain unquoted in order to expand properly
-        cloc $opt_clocopts "$INPUT_SOURCE"
-      done
-      ;;
-    
-    files)
-      for INPUT_SOURCE in "$@"; do
-        echo "Checking file: $INPUT_SOURCE"
-
-        # Make sure the file exists, otherwise error out
-        [ -f "$INPUT_SOURCE" ] || exitWithError MISSING_FILE "$INPUT_SOURCE"
-
-        # $opt_clocopts needs to remain unquoted in order to expand properly
-        cloc $opt_clocopts "$INPUT_SOURCE"
-      done
-      ;;
-
-    stdin)
-      echo "Checking code via stdin"
-      cloc $opt_clocopts - < /dev/stdin
-      ;;
-  esac
+  # Scan provided sources
+  parseSources "$@"
 }
 
 #######################################
@@ -179,12 +151,16 @@ function echo_debug() {
 # Globals:
 #   None
 # Arguments:
-#   None
+#   $1 - Provide a missing arument to display instead of a generic failure message
 # Returns:
 #   None
 #######################################
 function showSimpleHelp() {
-  echo "gn-cloc-script: missing arguments"
+  if [ -n "$1" ]; then
+    echo "gn-cloc-script: missing required argument \"$1\""
+  else
+    echo "gn-cloc-script: missing arguments"
+  fi
   echo "Usage: gn-cloc-script [OPTIONS]... EMAILDDR REPOURL..."
   echo
   echo "Try \"gn-cloc-script --help\" for more options and information."
@@ -231,6 +207,9 @@ ${B}OPTIONS${R}
 
   ${B}-vv${R}, ${B}--debug${R}
     $(blockPrint 4 "Run script with debug output.")
+
+  ${B}-D${R}, ${B}--clone-dir${R} ${U}directory${R}
+    $(blockPrint 4 "Directory to clone repositories to. If not set, it will clone the repositories to the current running directory.")
 
 ${B}PARSING OPTIONS${R}
   ${B}-G${R}, ${B}--git${R}, ${B}--repo${R}
@@ -340,6 +319,7 @@ function exitWithError() {
     NO_PACKAGE_MANAGER) shift; ERROR_MSG="No valid package manager was found";;
     INVALID_PACKAGE_MANAGER) shift; ERROR_MSG="An invalid package manager was provided: $*";;
     MISSING_DEP) shift; ERROR_MSG="Failed to install missing dependency: $*";;
+    REPO_DIR_MISMATCH) shift; ERROR_MSG="The directory \"$1\" contains a directory that does not match the provided repo URL \"$2\"";;
   esac
 
   [ -n "$ERROR_MSG" ] \
@@ -424,15 +404,29 @@ function installPackage() {
 #   None
 # Arguments:
 #   $1 - Git repository URL
+#   $2 - (Optional) Directory to clone repository to.
+#         If it is not set it will determined automatically.
 # Returns:
-#   None
+#   0 - Successful clone
+#   Non-Zero - Failure. May depend on git return code
 #######################################
 function cloneRepo() {
   local repo_url="$1"
-  local repo_dir=""
+  local repo_dir="$2"
 
-  repo_dir="$(getRepoDirectory "$1")"
-  git clone "$repo_url" "$repo_dir"
+  [ -z "$repo_dir" ] && repo_dir="$(getRepoDirectory "$1")"
+  echo_debug "Cloning \"$repo_url\" to \"$repo_dir\""
+
+  if [ -d "$repo_dir" ]; then
+    if grep -q "url = ${repo_url}" "$repo_dir/.git/config"; then
+      echo_verbose "Provided repository already exists at \"$repo_dir\". Proceeding."
+      return 0
+    else
+      exitWithError REPO_DIR_MISMATCH "$repo_dir" "$repo_url"
+    fi
+  else
+    git clone "$repo_url" "$repo_dir"
+  fi
 }
 
 #######################################
@@ -441,14 +435,18 @@ function cloneRepo() {
 #   Example #2: git@git.xtnet.link:Taerk/cloc-script.git -> cloc-script
 #
 # Globals:
-#   None
+#   opt_clone_dir
 # Arguments:
 #   $1 - Git repository URL
 # Returns:
 #   None
 #######################################
 function getRepoDirectory() {
-  basename "$1" | sed -r 's/\.git$//'
+  if [ -n "$opt_clone_dir" ]; then
+    realpath "${opt_clone_dir}/$(basename "$1" | sed -r 's/\.git$//')"
+  else
+    basename "$1" | sed -r 's/\.git$//'
+  fi
 }
 
 #######################################
@@ -479,7 +477,79 @@ function sendEmail() {
   [ -n "$opt_email_to" ] && { tval="$opt_email_to"; }
 
   # Variables below should remain unquoted in order to be expanded as valid arguments
-  mail "$fflag" "$fval" "$sflag" "$sval" "$cflag" "$cval" "$bflag" "$bval" "$tval" < /dev/stdin 
+  mail $fflag $fval $sflag $sval $cflag $cval $bflag $bval "$tval" < /dev/stdin 
+}
+
+function parseSources() {
+  echo_debug "Now attempting to parse all sources. Scan mode is: $opt_scan_mode"
+
+  # Scan provided files
+  case "$opt_scan_mode" in
+    git)
+      for INPUT_REPO in "$@"; do
+        parseRepo "$INPUT_REPO"
+      done
+      ;;
+    
+    files)
+      for INPUT_FILE in "$@"; do
+        parseFile "$INPUT_FILE"
+      done
+      ;;
+
+    stdin)
+      parseStdin
+      ;;
+  esac
+}
+
+function parseRepo() {
+  local source_repo="$1"
+  local repo_destination=""
+
+  echo_verbose "Checking repository: $source_repo"
+
+  repo_destination="$(getRepoDirectory "$source_repo")"
+  echo_debug "Expected clone path: $repo_destination"
+
+  if ! cloneRepo "$source_repo" "$repo_destination"; then
+    exitWithError REPO_ERROR
+  fi
+
+  echo "---"
+  echo "Type: git"
+  echo "Src:  $source_repo"
+  echo "Dir:  $repo_destination"
+  echo "---"
+  
+  # $opt_clocopts needs to remain unquoted in order to expand properly
+  cloc $opt_clocopts "$repo_destination"
+}
+
+function parseFile() {
+  local source_file="$1"
+
+  echo "Checking file: $source_file"
+
+  # Make sure the file exists, otherwise error out
+  [ -f "$source_file" ] || exitWithError MISSING_FILE "$source_file"
+
+  echo "---"
+  echo "Type: file"
+  echo "Src:  $(realpath "$source_file")"
+  echo "---"
+
+  # $opt_clocopts needs to remain unquoted in order to expand properly
+  cloc $opt_clocopts "$source_file"
+}
+
+function parseStdin() {
+  echo "---"
+  echo "Type: stdin"
+  echo "---"
+
+  echo "Checking code via stdin"
+  cloc $opt_clocopts - < /dev/stdin
 }
 
 main "$@"
