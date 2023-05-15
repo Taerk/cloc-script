@@ -230,7 +230,7 @@ ${B}PARSING OPTIONS${R}
     $(blockPrint 4 "Clone a provided git repo URL to be scanned. This is the default behavior.")
 
   ${B}-F${R}, ${B}--files${R}
-    $(blockPrint 4 "Parse the provided file list to be scanned.")
+    $(blockPrint 4 "Parse the provided files and/or directories to be scanned.")
 
   ${B}-S${R}, ${B}--stdin${R}
     $(blockPrint 4 "Parse the provided stdin to be scanned.")
@@ -702,14 +702,18 @@ function parseFile() {
   echo_verbose "Checking file: $source_file"
   echo
   echo "---"
-  echo "Type: file"
+  if [ -d "$source_file" ]; then
+    echo "Type: file (directory)"
+  else
+    echo "Type: file"
+  fi
   echo "Src:  $(realpath "$source_file")"
   echo "---"
 
   # Make sure the file exists, otherwise return a non-zero exit code. This will allow
   # the loop to continue.
-  if [ ! -f "$source_file" ]; then
-    echo "Error: File not found: $source_file" >&2
+  if [ ! -f "$source_file" -a ! -d "$source_file" ]; then
+    echo "Error: File \"$source_file\" not found" >&2
     return 1
   fi
 
