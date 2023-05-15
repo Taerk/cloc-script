@@ -11,7 +11,10 @@ readonly SCRIPT_UPDATED="May 14 2023"
 
 # Global Variables
 declare -ir UNIX_TIME=$(date +%s)
-declare -r LOG_DIR="/tmp"
+declare -r LOG_DIR="/tmp/gn-cloc"
+declare -r LOG_PATH="${LOG_DIR}/gn-cloc-${UNIX_TIME}.log"
+declare -r OUT_PATH="${LOG_DIR}/gn-cloc-${UNIX_TIME}.out"
+declare -r ERR_PATH="${LOG_DIR}/gn-cloc-${UNIX_TIME}.err"
 declare PKGMNGR=""
 
 # Configurable Settings
@@ -57,6 +60,9 @@ function main() {
 
   # Allow --debug early on for process argument testing
   [ "$1" = --debug -o "$1" = -vv ] && { opt_loglevel=2; shift; }
+
+  # Create the log directory
+  mkdir -p "$LOG_DIR"
 
   # Get provided options
   get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,stdin,batch,clone-dir:,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
@@ -112,7 +118,10 @@ function main() {
   fi
 
   # Scan provided sources
-  parseSources "$@"
+  if parseSources "$@"; then
+    echo "Successfully parsed sources!"
+    sendEmail < "$OUT_PATH"
+  fi
 }
 
 #######################################
@@ -314,7 +323,6 @@ function exitWithError() {
   case "$ERROR_ID" in
     INVALID_ARGUMENT) shift; ERROR_MSG="Invalid argument received \"$*\"";;
     INVALID_ARGUMENTS) shift; ERROR_MSG="Invalid arguments received: $*\nUse -h to view help for valid arguments.";;
-    MISSING_FILE) shift; ERROR_MSG="File not found \"$*\".";;
     FILES_AND_STDIN) shift; ERROR_MSG="Files were provided while stdin is enabled. Please specify only file arguments OR --stdin";;
     NO_PACKAGE_MANAGER) shift; ERROR_MSG="No valid package manager was found";;
     INVALID_PACKAGE_MANAGER) shift; ERROR_MSG="An invalid package manager was provided: $*";;
@@ -476,8 +484,22 @@ function sendEmail() {
   [ -n "$opt_email_bcc" ] && { bflag="-b"; bval="$opt_email_bcc"; }
   [ -n "$opt_email_to" ] && { tval="$opt_email_to"; }
 
+  echo
+  echo "Now sending results"
+  echo "  Subject: ${sval}"
+  echo "  To: ${tval}"
+  [ -n "$fval" ] && echo "  From: ${fval}"
+  [ -n "$cval" ] && echo "  CC: ${cval}"
+  [ -n "$bval" ] && echo "  BCC: ${bval}"
+
   # Variables below should remain unquoted in order to be expanded as valid arguments
-  mail $fflag $fval $sflag $sval $cflag $cval $bflag $bval "$tval" < /dev/stdin 
+  if mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < /dev/stdin; then
+    printf "\nSuccessfully sent email!\n"
+    return 0
+  else
+    printf "\nFailed to send email!\n"
+    return 1
+  fi
 }
 
 function parseSources() {
@@ -500,7 +522,7 @@ function parseSources() {
     stdin)
       parseStdin
       ;;
-  esac
+  esac 2>&1 | tee "$OUT_PATH"
 }
 
 function parseRepo() {
@@ -512,15 +534,14 @@ function parseRepo() {
   repo_destination="$(getRepoDirectory "$source_repo")"
   echo_debug "Expected clone path: $repo_destination"
 
-  if ! cloneRepo "$source_repo" "$repo_destination"; then
-    exitWithError REPO_ERROR
-  fi
-
   echo "---"
   echo "Type: git"
   echo "Src:  $source_repo"
   echo "Dir:  $repo_destination"
   echo "---"
+
+  # Clone the repo. Stop the function if it fails. This will allow the loop to continue.
+  cloneRepo "$source_repo" "$repo_destination" || return 1
   
   # $opt_clocopts needs to remain unquoted in order to expand properly
   cloc $opt_clocopts "$repo_destination"
@@ -531,13 +552,17 @@ function parseFile() {
 
   echo "Checking file: $source_file"
 
-  # Make sure the file exists, otherwise error out
-  [ -f "$source_file" ] || exitWithError MISSING_FILE "$source_file"
-
   echo "---"
   echo "Type: file"
   echo "Src:  $(realpath "$source_file")"
   echo "---"
+
+  # Make sure the file exists, otherwise return a non-zero exit code. This will allow
+  # the loop to continue.
+  if [ ! -f "$source_file" ]; then
+    echo "Error: File not found: $source_file" >&2
+    return 1
+  fi
 
   # $opt_clocopts needs to remain unquoted in order to expand properly
   cloc $opt_clocopts "$source_file"
