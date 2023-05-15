@@ -582,7 +582,7 @@ function sendEmail() {
 
   # Variables below should remain unquoted in order to be expanded as valid arguments
   # tr is used to strip return carriages "\r" and prevent problems sending
-  if mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < <(tr '\r' '\n' < /dev/stdin | egrep -v '^Updating files: [0-9]+% \([0-9]+/[0-9]+\)$|files$|^Counting:|^Unique:'); then
+  if mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < <(tr '\r' '\n' < /dev/stdin | egrep -v '^Updating files:\s+[0-9]+% \([0-9]+\/[0-9]+\)$|files$|^Counting:|^Unique:'); then
     printf "\nSuccessfully sent email!\n"
     return 0
   else
