@@ -102,12 +102,22 @@ Set the bcc for the notification email. Use commas to separate multiple emails.
 
 This can also be set with the `CLOC_MAILX_BCC` environment variable.
 
-## Example
+# Examples
 
-Below is an example of the code being run:
+Below is an example of the code being run successfully:
 
 ![](examples/cloc-script-test-run.png)
 
 In addition to the resulting email:
 
 ![](examples/cloc-script-email-result.png)
+
+## Errors
+
+Below is a sample email with a scan requested on two different repositories. There are different errors on each one.
+
+* The first scan failed due to not having permissions to clone the repository.
+* The second scan failed due to a directory for the repository already existing and not matching the requested repository.
+  - This can be resolved by either moving the existing directory, removing it, or using `-D` to change the directory to clone the repository to.
+
+![](examples/cloc-check-failures.png)
