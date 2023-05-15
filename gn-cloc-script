@@ -417,9 +417,9 @@ function checkDependencies() {
 function checkPackage() {
   case "$PKGMNGR" in
     dnf|yum) rpm -q "$1" >/dev/null;;
-    apt) apt -y -q install "$1";;
+    apt) dpkg -l "$1" >/dev/null;;
     # pkg) pkg -y -q install "$1";;
-    # pacman) pacman -y -q install "$1";;
+    # pacman) pacman -y -q -S "$1";;
     *) exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR";;
   esac
 }
@@ -587,11 +587,12 @@ function sendEmail() {
 
   # Variables below should remain unquoted in order to be expanded as valid arguments
   # tr is used to strip return carriages "\r" and prevent problems sending
+  echo_debug "Mail command:" mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval"
   if mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < <(tr '\r' '\n' < /dev/stdin | egrep -v '^Updating files:\s+[0-9]+% \([0-9]+\/[0-9]+\)$|files$|^Counting:|^Unique:'); then
     printf "\nSuccessfully sent email!\n"
     return 0
   else
-    printf "\nFailed to send email!\n"
+    printf "\nFailed to send email!\nmail command returned exit code $?\n"
     return 1
   fi
 }
