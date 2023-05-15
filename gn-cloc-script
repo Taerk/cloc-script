@@ -518,7 +518,7 @@ function sendEmail() {
   [ -n "$bval" ] && echo "  BCC: ${bval}"
 
   # Variables below should remain unquoted in order to be expanded as valid arguments
-  if mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < /dev/stdin; then
+  if mail -a 'Content-Type: text/plain' $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < /dev/stdin; then
     printf "\nSuccessfully sent email!\n"
     return 0
   else
