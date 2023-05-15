@@ -100,13 +100,13 @@ function main() {
   # Install necessary packages for the script to continue running 
   determinePackageManager || exitWithError NO_PACKAGE_MANAGER
   for dep in cloc mailx sendmail sed coreutils; do
-    checkPackage "$dep" || installPackage "$dep" || {
-      if [ "$dep" = cloc ]; then
-        installClocPl || exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR"
-      else
-        exitWithError MISSING_DEP
-      fi
-    }
+    case "$dep" in
+      cloc)
+        checkPackage "$dep" || installPackage "$dep" || test -x ~/bin/cloc || installClocPl || exitWithError MISSING_DEP
+        ;;
+      *) checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
+        ;;
+    esac
   done
 
   echo_debug "cloc Options: $opt_clocopts"
@@ -404,7 +404,8 @@ function checkPackage() {
 function installClocPl() {
   echo "Installing cloc to ~/bin"
   mkdir -p ~/bin
-  wget 'https://raw.githubusercontent.com/AlDanial/cloc/master/cloc' -O ~/bin/cloc && chmod u+x ~/bin/cloc || return 1
+  wget 'https://raw.githubusercontent.com/AlDanial/cloc/master/cloc' -O ~/bin/cloc || return 1
+  [ -f ~/bin/cloc ] && chmod u+x ~/bin/cloc 
 }
 
 #######################################
