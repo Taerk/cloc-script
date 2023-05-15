@@ -390,6 +390,11 @@ function checkDependencies() {
       _mailserver)
         checkAndInstallMailService || exitWithError NO_MAIL_SERVICE
         ;;
+      
+      # mailx is provided by mailutils sometimes (such as on Ubuntu)
+      mailx)
+        checkPackage "mailx" || checkPackage "mailutils" || installPackage "mailx" || installPackage "mailutils" || exitWithError MISSING_DEP
+        ;;
 
       # Most packages should be available through the OS' repo
       *) checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
