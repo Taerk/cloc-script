@@ -664,6 +664,7 @@ function parseRepo() {
   echo_debug "Expected clone path: $repo_destination"
 
   echo
+  echo "---"
   echo "Type: git"
   echo "Src:  $source_repo"
   echo "Dir:  $repo_destination"
@@ -691,8 +692,9 @@ function parseRepo() {
 function parseFile() {
   local source_file="$1"
 
-  echo "Checking file: $source_file"
-
+  echo_verbose
+  echo_verbose "Checking file: $source_file"
+  echo
   echo "---"
   echo "Type: file"
   echo "Src:  $(realpath "$source_file")"
@@ -722,6 +724,7 @@ function parseFile() {
 #   Non-zero - Return code of cloc
 #######################################
 function parseStdin() {
+  echo
   echo "---"
   echo "Type: stdin"
   echo "---"
