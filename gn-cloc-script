@@ -99,7 +99,7 @@ function main() {
 
   # Install necessary packages for the script to continue running 
   determinePackageManager || exitWithError NO_PACKAGE_MANAGER
-  for dep in cloc mailx sendmail sed coreutils; do
+  for dep in cloc mailx sed coreutils; do
     case "$dep" in
       cloc)
         test -x ~/bin/cloc || checkPackage "$dep" || installPackage "$dep" || installClocPl || exitWithError MISSING_DEP
@@ -518,7 +518,8 @@ function sendEmail() {
   [ -n "$bval" ] && echo "  BCC: ${bval}"
 
   # Variables below should remain unquoted in order to be expanded as valid arguments
-  if mail -a 'Content-Type: text/plain' $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < /dev/stdin; then
+  # tr is used to strip return carriages "\r" and prevent problems sending
+  if mail $fflag $fval $sflag "$sval" $cflag $cval $bflag $bval "$tval" < <(tr '\r' '\n' < /dev/stdin | egrep -v 'files$|^Counting:|^Unique:'); then
     printf "\nSuccessfully sent email!\n"
     return 0
   else
