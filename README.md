@@ -20,12 +20,13 @@ The following requirements are required for the script to run:
 - Software dependencies:
   * cloc
   * mailx
-  * sendmail
   * sed
   * coreutils
-- **The script will attempt to install the dependencies with non-interactive sudo.**
+- A functioning mail server (i.e. sendmail, postfix, exim)
 
 These conditions are met by most versions of RHEL, Fedora, and Ubuntu.
+
+**The script will attempt to install the dependencies if they're not present with non-interactive sudo unless `--sudo-interactive` is specified.**
 
 ## Options
 
