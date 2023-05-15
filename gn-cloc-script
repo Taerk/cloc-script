@@ -6,8 +6,8 @@
 # Version Information
 readonly SCRIPT_AUTHOR="Gabriel Nieves"
 readonly SCRIPT_CONTACT="taerkex@gmail.com"
-readonly SCRIPT_VERSION="0.1"
-readonly SCRIPT_UPDATED="May 14 2023"
+readonly SCRIPT_VERSION="0.9"
+readonly SCRIPT_UPDATED="May 15 2023"
 
 # Global Variables
 declare -ir UNIX_TIME=$(date +%s)
