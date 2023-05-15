@@ -30,6 +30,7 @@ declare opt_email_subject="${CLOC_MAILX_SUBJECT:=CLOC Analysis Report}"
 declare opt_email_from="$CLOC_MAILX_FROM"
 declare opt_email_cc="$CLOC_MAILX_CC"
 declare opt_email_bcc="$CLOC_MAILX_BCC"
+declare opt_sudo_interactive="-n"
 
 #######################################
 # Main run of the script. It completes the operatiosn in the following order:
@@ -65,7 +66,7 @@ function main() {
   mkdir -p "$LOG_DIR"
 
   # Get provided options
-  get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,stdin,batch,clone-dir:,cloc-options: -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
+  get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,stdin,batch,clone-dir:,cloc-options:,sudo-interactive -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
 
   # This converts options to a shell-readable format:
   #  - allows repeatable arguments (e.g. -vv)
@@ -87,6 +88,7 @@ function main() {
       -S|--stdin) opt_scan_mode="stdin";;
       -F|--files) opt_scan_mode="files";;
       --cloc-options) opt_clocopts="$2"; shift;;
+      --sudo-interactive) opt_sudo_interactive="";;
 
       # End loop
       --) shift; break;;
@@ -220,6 +222,9 @@ ${B}OPTIONS${R}
   ${B}-D${R}, ${B}--clone-dir${R} ${U}directory${R}
     $(blockPrint 4 "Directory to clone repositories to. If not set, it will clone the repositories to the current running directory.")
 
+  ${B}--sudo-interactive${R}
+    $(blockPrint 4 "Disables non-interactive mode of sudo when attempting to install packages.")
+
 ${B}PARSING OPTIONS${R}
   ${B}-G${R}, ${B}--git${R}, ${B}--repo${R}
     $(blockPrint 4 "Clone a provided git repo URL to be scanned. This is the default behavior.")
@@ -237,9 +242,6 @@ ${B}EMAIL OPTIONS${R}
   $(blockPrint 2 "The script provides various methods for adjusting the email settings. Options can be used or environment variables can be used. Refer to the arguments below for available environment variables for each setting.")
 
   $(blockPrint 2 "The environment variables can also be saved in ${B}~/cloc_config${R} and will be auto-loaded by the script.")
-
-  ${B}-B${R}, ${B}--batch${R}
-    $(blockPrint 4 "When running script on multiple files, sends a single email rather than an individual email for each file.")
 
   ${B}-t${R}, ${B}--to${R} ${U}to-addr${R}
     $(blockPrint 4 "Set the destination address for the email. This is a required setting either through this argument or as an argument for the script.")
@@ -377,8 +379,8 @@ function checkPackage() {
   case "$PKGMNGR" in
     dnf|yum) rpm -q "$1" >/dev/null;;
     apt) apt -y -q install "$1";;
-    pkg) pkg -y -q install "$1";;
-    pacman) pacman -y -q install "$1";;
+    # pkg) pkg -y -q install "$1";;
+    # pacman) pacman -y -q install "$1";;
     *) exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR";;
   esac
 }
@@ -397,10 +399,10 @@ function checkPackage() {
 function installPackage() {
   echo "Script is installing missing dependencies: $1"
   case "$PKGMNGR" in
-    dnf|yum) sudo -n "$PKGMNGR" -y -q install "$1";;
-    apt) sudo -n apt -y -q install "$1";;
-    pkg) sudo -n pkg -y -q install "$1";;
-    pacman) sudo -n pacman -y -q -S install "$1";;
+    dnf|yum) sudo ${opt_sudo_interactive} "$PKGMNGR" -y -q install "$1";;
+    apt) sudo ${opt_sudo_interactive} apt -y -q install "$1";;
+    # pkg) sudo ${opt_sudo_interactive} pkg -y -q install "$1";;
+    # pacman) sudo ${opt_sudo_interactive} pacman -y -q -S install "$1";;
     *) exitWithError INVALID_PACKAGE_MANAGER "$PKGMNGR";;
   esac
 }
