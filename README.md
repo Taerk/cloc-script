@@ -25,13 +25,7 @@ The following requirements are required for the script to run:
   * coreutils
 - **The script will attempt to install the dependencies with non-interactive sudo.**
 
-These conditions are met by most versions of RHEL, CentOS, Fedora, and Ubuntu.
-
-## Example
-
-Below is an example of the code being run:
-```
-```
+These conditions are met by most versions of RHEL, Fedora, and Ubuntu.
 
 ## Options
 
@@ -106,3 +100,13 @@ This can also be set with the `CLOC_MAILX_CC` environment variable.
 Set the bcc for the notification email. Use commas to separate multiple emails.
 
 This can also be set with the `CLOC_MAILX_BCC` environment variable.
+
+## Example
+
+Below is an example of the code being run:
+
+![](examples/cloc-script-test-run.png)
+
+In addition to the resulting email:
+
+![](examples/cloc-script-email-result.png)
