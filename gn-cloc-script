@@ -15,7 +15,7 @@ declare -r LOG_DIR="/tmp"
 declare PKGMNGR=""
 
 # Configurable Settings
-[ -f cloc_config ] && source cloc_config
+[ -f ~/cloc_config ] && source ~/cloc_config
 declare opt_scan_mode="git"
 declare -i opt_loglevel=0
 declare -i opt_batch=0
@@ -23,7 +23,7 @@ declare opt_clone_dir=""
 declare opt_clocopts=""
 declare -i opt_email_batch=0
 declare opt_email_to="$CLOC_MAILX_TO"
-declare opt_email_subject="$CLOC_MAILX_SUBJECT"
+declare opt_email_subject="${CLOC_MAILX_SUBJECT:=CLOC Analysis Report}"
 declare opt_email_from="$CLOC_MAILX_FROM"
 declare opt_email_cc="$CLOC_MAILX_CC"
 declare opt_email_bcc="$CLOC_MAILX_BCC"
@@ -161,7 +161,7 @@ function showSimpleHelp() {
   else
     echo "gn-cloc-script: missing arguments"
   fi
-  echo "Usage: gn-cloc-script [OPTIONS]... EMAILDDR REPOURL..."
+  echo "Usage: gn-cloc-script [OPTIONS]... TO-ADDR REPOURL..."
   echo
   echo "Try \"gn-cloc-script --help\" for more options and information."
 }
@@ -238,7 +238,7 @@ ${B}EMAIL OPTIONS${R}
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_TO${R} environment variable.")
 
   ${B}-s${R}, ${B}--subject${R} ${U}value${R}
-    $(blockPrint 4 "Set the subject for the resulting email notification. If not set, it will default to \"CLOC Analysis Report: # File(s)\".")
+    $(blockPrint 4 "Set the subject for the resulting email notification. If not set, it will default to \"CLOC Analysis Report\".")
 
     $(blockPrint 4 "This can also be set with the ${B}CLOC_MAILX_SUBJECT${R} environment variable.")
 
