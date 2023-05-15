@@ -69,7 +69,7 @@ function main() {
   mkdir -p "$LOG_DIR"
 
   # Get provided options
-  get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,batch,clone-dir:,cloc-options:,sudo-interactive,git,repo,stdin,files -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
+  get_options=$(getopt -o h,v,D:,G,S,F,f,s,c,b,t -l help,verbose,debug,batch,clone-dir:,cloc-options:,sudo-interactive,git,repo,stdin,files -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
 
   # This converts options to a shell-readable format:
   #  - allows repeatable arguments (e.g. -vv)
@@ -92,6 +92,12 @@ function main() {
       -F|--files) opt_scan_mode="files";;
       --cloc-options) opt_clocopts="$2"; shift;;
       --sudo-interactive) opt_sudo_interactive="";;
+
+      -f|--from) opt_email_from="$2"; shift;;
+      -s|--subject) opt_email_subject="$2"; shift;;
+      -c|--cc) opt_email_cc="$2"; shift;;
+      -b|--bcc) opt_email_bcc="$2"; shift;;
+      -t|--to) opt_email_to="$2"; shift;;
 
       # End loop
       --) shift; break;;
