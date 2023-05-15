@@ -99,16 +99,7 @@ function main() {
   done
 
   # Install necessary packages for the script to continue running 
-  determinePackageManager || exitWithError NO_PACKAGE_MANAGER
-  for dep in cloc mailx sed coreutils; do
-    case "$dep" in
-      cloc)
-        test -x ~/bin/cloc || checkPackage "$dep" || installPackage "$dep" || installClocPl || exitWithError MISSING_DEP
-        ;;
-      *) checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
-        ;;
-    esac
-  done
+  checkDependencies
 
   echo_debug "cloc Options: $opt_clocopts"
 
@@ -337,6 +328,7 @@ function exitWithError() {
     INVALID_PACKAGE_MANAGER) shift; ERROR_MSG="An invalid package manager was provided: $*";;
     MISSING_DEP) shift; ERROR_MSG="Failed to install missing dependency: $*";;
     REPO_DIR_MISMATCH) shift; ERROR_MSG="The directory \"$1\" contains a directory that does not match the provided repo URL \"$2\"";;
+    NO_MAIL_SERVICE) ERROR_MSG="The script failed to find a compatible mail service with mailx. Please install one manually.";;
   esac
 
   [ -n "$ERROR_MSG" ] \
@@ -369,6 +361,39 @@ function determinePackageManager() {
   [ -n "$PKGMNGR" ] && return 0
   
   return 1
+}
+
+#######################################
+# Checks dependencies and installs them as necessary.
+# Failures will result in fatal errors and will exit the script.
+#
+# Globals:
+#   None
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
+function checkDependencies() {
+  determinePackageManager || exitWithError NO_PACKAGE_MANAGER
+  
+  for dep in cloc mailx sed coreutils _mailserver; do
+    case "$dep" in
+      # cloc is not always available through repositories but can still be installed as a single perl file, so it's handled a little differently
+      cloc)
+        test -x ~/bin/cloc || checkPackage "$dep" || installPackage "$dep" || installClocPl || exitWithError MISSING_DEP
+        ;;
+      
+      # The server will need a functioning mailserver for mailx. This can vary from server to server, so this is also handled separately
+      _mailserver)
+        checkAndInstallMailService || exitWithError NO_MAIL_SERVICE
+        ;;
+
+      # Most packages should be available through the OS' repo
+      *) checkPackage "$dep" || installPackage "$dep" || exitWithError MISSING_DEP
+        ;;
+    esac
+  done
 }
 
 #######################################
@@ -407,6 +432,41 @@ function installClocPl() {
   mkdir -p ~/bin
   wget 'https://raw.githubusercontent.com/AlDanial/cloc/master/cloc' -O ~/bin/cloc || return 1
   [ -f ~/bin/cloc ] && chmod u+x ~/bin/cloc 
+}
+
+#######################################
+# Checks to ensure there's a running mail service for use with mailx.
+# If there isn't, it will attempt to install one.
+# As a last resort, it will check if port 25 (email port) is in active indicating a mail server being present.
+#
+# Globals:
+#   None
+# Arguments:
+#   None
+# Returns:
+#   0 - Mail server is present
+#   1 - Mail server is not present
+#######################################
+function checkAndInstallMailService() {
+  # Iterate through common mail services. If any of them exists, simply return 0
+  for dep in sendmail postfix exim cpanel-exim; do
+    checkPackage "$dep" && return 0
+  done
+
+  # Iterate through common mail services once more, attempting to install them.
+  # If one of them successfully installs, return 0
+  for dep in sendmail postfix exim cpanel-exim; do
+    installPackage "$dep" && return 0
+  done
+
+  # Last resort, check if a mail server is running
+  if ss -at 'sport = :25' >/dev/null 2>/dev/null; then
+    echo_verbose "No mail server could be determined, however there does appear to be an active mail server. Proceeding."
+    return 0
+  fi
+
+  # If none of the mail servers were successfully installed, return 1
+  return 1
 }
 
 #######################################
