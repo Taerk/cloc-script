@@ -608,7 +608,7 @@ function parseSources() {
   echo_debug "Now attempting to parse all sources. Scan mode is: $opt_scan_mode"
 
   # Provide some information about the run conditions for the check
-  cat > "$OUT_PATH" <<- EOF
+  cat >> "$OUT_PATH" <<- EOF
 PARSING SYSTEM INFORMATION
 -----
 $HOSTNAME <$(hostname -i)>
@@ -635,7 +635,7 @@ EOF
     stdin)
       parseStdin
       ;;
-  esac 2>&1 | tee "$OUT_PATH"
+  esac 2>&1 | tee -a "$OUT_PATH"
 
   return 0
 }
