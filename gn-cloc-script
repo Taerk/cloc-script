@@ -3,6 +3,8 @@
 
 # Gabriel N Cloc Script [Technical Assessment #2]
 
+source /etc/os-release
+
 # Version Information
 readonly SCRIPT_AUTHOR="Gabriel Nieves"
 readonly SCRIPT_CONTACT="taerkex@gmail.com"
@@ -16,10 +18,10 @@ declare -r LOG_PATH="${LOG_DIR}/gn-cloc-${UNIX_TIME}.log"
 declare -r OUT_PATH="${LOG_DIR}/gn-cloc-${UNIX_TIME}.out"
 declare -r ERR_PATH="${LOG_DIR}/gn-cloc-${UNIX_TIME}.err"
 declare PKGMNGR=""
+declare -r OS_INFO="$NAME $VERSION" # This is from /etc/os-release
 
 # Configurable Settings
 [ -f ~/cloc_config ] && source ~/cloc_config
-source /etc/os-release
 declare opt_scan_mode="git"
 declare -i opt_loglevel=0
 declare -i opt_batch=0
@@ -595,14 +597,13 @@ function sendEmail() {
 # Globals:
 #   opt_scan_mode
 #   OUT_PATH
-#   ID       (from /etc/os-release)
-#   VERSION  (from /etc/os-release)
+#   OS_INFO
 #   HOSTNAME (from env)
 #   PWD      (from env)
 # Arguments:
 #   $@ - Input sources
 # Returns:
-#   0 - Should always return 0 so it can email errors
+#   0 - Should always return 0 so it can email failed scans
 #######################################
 function parseSources() {
   echo_debug "Now attempting to parse all sources. Scan mode is: $opt_scan_mode"
@@ -611,7 +612,7 @@ function parseSources() {
   cat >> "$OUT_PATH" <<- EOF
 System Information:
   $HOSTNAME <$(hostname -i)>
-  OS: $ID $VERSION
+  $OS_INFO
   Running as user: $USER
   Working directory: $PWD
 -----
