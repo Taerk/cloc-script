@@ -69,7 +69,7 @@ function main() {
   mkdir -p "$LOG_DIR"
 
   # Get provided options
-  get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,stdin,batch,clone-dir:,cloc-options:,sudo-interactive -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
+  get_options=$(getopt -o h,v,D:,G,S,F -l help,verbose,debug,batch,clone-dir:,cloc-options:,sudo-interactive,git,repo,stdin,files -- "$@") || exitWithError INVALID_ARGUMENTS "$get_options"
 
   # This converts options to a shell-readable format:
   #  - allows repeatable arguments (e.g. -vv)
